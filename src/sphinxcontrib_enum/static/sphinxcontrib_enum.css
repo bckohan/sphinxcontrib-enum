@@ -1,0 +1,47 @@
+/* sphinxcontrib-enum: enum-table styles */
+
+/* shrink to the table so the download buttons align with its right edge */
+.enum-table-container {
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto 1.5em auto;
+}
+
+.enum-table-container table.enum-table,
+.enum-table-container .table-wrapper {
+    margin-bottom: 0.4em;
+}
+
+.enum-table-downloads {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.4em;
+}
+
+.enum-table-downloads a.enum-table-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.2em 0.65em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    line-height: 1.6;
+    text-decoration: none;
+    color: var(--color-foreground-secondary, #555);
+    background: var(--color-background-secondary, transparent);
+    border: 1px solid var(--color-background-border, currentColor);
+    border-radius: 0.3em;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.enum-table-downloads a.enum-table-download:hover,
+.enum-table-downloads a.enum-table-download:focus-visible {
+    color: var(--color-brand-primary, #2962ff);
+    border-color: var(--color-brand-primary, #2962ff);
+}
+
+.enum-table-downloads a.enum-table-download svg {
+    flex: none;
+}

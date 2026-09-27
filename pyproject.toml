@@ -1,0 +1,147 @@
+[project]
+name = "sphinxcontrib-enum"
+version = "0.1.0"
+description = "Sphinx directive for documenting dataclass enums in tabular format, with support for enum-properties."
+requires-python = ">=3.11,<4.0"
+authors = [
+  {name = "Brian Kohan", email = "bckohan@gmail.com"},
+]
+license = "MIT"
+license-files = [ "LICENSE" ]
+
+readme = "README.md"
+repository = "https://github.com/bckohan/sphinxcontrib-enum"
+homepage = "https://sphinxcontrib-enum.readthedocs.io"
+keywords = ["sphinx", "enum", "enumeration", "dataclass", "enum-properties", "table", "documentation"]
+dependencies = [
+    "sphinx>=8.0",
+]
+classifiers = [
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Development Status :: 4 - Beta",
+    "Framework :: Sphinx",
+    "Framework :: Sphinx :: Extension",
+    "Topic :: Documentation :: Sphinx",
+    "Topic :: Documentation",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Software Development :: Libraries",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sphinxcontrib_enum"]
+
+[project.urls]
+"Homepage"      = "https://sphinxcontrib-enum.readthedocs.io"
+"Documentation" = "https://sphinxcontrib-enum.readthedocs.io"
+"Repository"    = "https://github.com/bckohan/sphinxcontrib-enum"
+"Issues"        = "https://github.com/bckohan/sphinxcontrib-enum/issues"
+"Changelog"     = "https://sphinxcontrib-enum.readthedocs.io/en/latest/changelog.html"
+
+[project.optional-dependencies]
+# enum-properties enums are detected without importing it, this extra only installs
+# a supported version alongside the extension
+properties = [
+    "enum-properties>=2.4.0,<3.0",
+]
+
+[dependency-groups]
+docs = [
+    "doc8>=1.1.2",
+    "furo>=2024.8.6",
+    "readme-renderer[md]>=44.0",
+    "sphinx>=8.0.0",
+    "sphinx-autobuild>=2024.10.3",
+    "sphinx-tabs>=3.4.7",
+]
+typing = [
+    "pyright>=1.1.390",
+    "mypy>=1.19.1",
+]
+lint = [
+    "ruff>=0.15.0",
+    "readme-renderer[md]>=43.0",
+    "doc8>=1.1.2",
+]
+coverage  = ["coverage[toml]>=7.6.1"]
+test = [
+    { include-group = "coverage" },
+    "beautifulsoup4>=4.12.0",
+    "pypdf>=6.0.0",
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+]
+dev = [
+    { include-group = "typing" },
+    { include-group = "test" },
+    { include-group = "docs" },
+    { include-group = "lint" },
+    "packaging>=24.2",
+    "tomlkit>=0.13.3",
+    "ipdb>=0.13.13",
+    "ipython>=8.18.1",
+]
+
+[tool.mypy]
+check_untyped_defs = true
+ignore_missing_imports = true
+mypy_path = ["src"]
+packages = ["sphinxcontrib_enum"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+include = ["src/sphinxcontrib_enum"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = true
+reportDuplicateImport = true
+
+[tool.doc8]
+max-line-length = 100
+sphinx = true
+
+[tool.pytest.ini_options]
+python_files = "test*.py"
+norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__"
+addopts = [
+    "--strict-markers",
+    "--cov=sphinxcontrib_enum",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["sphinxcontrib_enum"]
+concurrency = ["thread", "multiprocessing"]
+parallel = true
+relative_files = true
+command_line = "-m pytest --cov=sphinxcontrib_enum"
+
+[tool.coverage.paths]
+source = ["sphinxcontrib_enum"]
+
+[tool.ruff]
+line-length = 88
+exclude = ["doc", "dist"]
+target-version = "py311"
+
+[tool.ruff.lint]
+exclude = ["tests/**/*"]

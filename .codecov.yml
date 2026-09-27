@@ -1,0 +1,3 @@
+coverage:
+  fixes:
+    - "__init__.py::sphinxcontrib_enum/__init__.py"
