@@ -3,7 +3,7 @@
 Changelog
 =========
 
-0.1.0 (2026-MM-DD)
+0.1.0 (2026-09-28)
 ------------------
 
 * Initial release: the ``enum-table`` directive with CSV and JSON downloads.
