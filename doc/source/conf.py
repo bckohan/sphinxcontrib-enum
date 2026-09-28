@@ -44,3 +44,6 @@ linkcheck_allow_redirects = True
 
 # xelatex handles the unicode in the module docstring banner
 latex_engine = "xelatex"
+
+# show the download buttons on every example table
+enum_table_download = True

@@ -11,6 +11,7 @@ import pytest
 from bs4 import BeautifulSoup
 from pypdf import PdfReader
 from sphinx.application import Sphinx
+from sphinx.errors import ConfigError
 from sphinx.util.console import nocolor
 from sphinx.util.docutils import docutils_namespace
 
@@ -183,7 +184,9 @@ def test_import_enum():
 
 
 def test_enum_properties_table(tmp_path):
-    out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Color\n")
+    out, warnings = build(
+        tmp_path, ".. enum-table:: tests.enums.Color\n", enum_table_download=True
+    )
     assert not warnings
     page = soup(out)
     headers, rows = table_data(page)
@@ -232,7 +235,9 @@ def test_enum_properties_table(tmp_path):
 
 
 def test_csv_escaping(tmp_path):
-    out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Level\n")
+    out, warnings = build(
+        tmp_path, ".. enum-table:: tests.enums.Level\n", enum_table_download=True
+    )
     assert not warnings
     page = soup(out)
     headers, rows = table_data(page)
@@ -247,7 +252,9 @@ def test_csv_escaping(tmp_path):
 
 
 def test_dataclass_mixin_table(tmp_path):
-    out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Planet\n")
+    out, warnings = build(
+        tmp_path, ".. enum-table:: tests.enums.Planet\n", enum_table_download=True
+    )
     assert not warnings
     page = soup(out)
     headers, rows = table_data(page)
@@ -268,6 +275,7 @@ def test_dataclass_value_table(tmp_path):
         .. enum-table:: tests.enums.ColorValue
             :columns: name value
         """,
+        enum_table_download=True,
     )
     assert not warnings
     page = soup(out)
@@ -320,6 +328,7 @@ def test_options(tmp_path):
         See :numref:`color-table` and :ref:`color-table`.
         """,
         numfig=True,
+        enum_table_download=True,
     )
     assert not warnings
     page = soup(out)
@@ -354,6 +363,7 @@ def test_json_keyed_without_name_column(tmp_path):
         .. enum-table:: tests.enums.Color
             :columns: hex
         """,
+        enum_table_download=True,
     )
     assert not warnings
     page = soup(out)
@@ -408,13 +418,62 @@ def test_download_option(tmp_path):
     assert set(downloads(out, page, 1)) == {"Plain.csv"}
 
 
-def test_download_disabled_globally(tmp_path):
+@pytest.mark.parametrize(
+    "conf",
+    [
+        {},  # disabled by default
+        {"enum_table_download": False},
+        {"enum_table_download": None},
+        {"enum_table_download": []},
+        {"enum_table_download": ()},
+        {"enum_table_download": ""},
+        {"enum_table_download": "none"},
+    ],
+)
+def test_download_disabled_globally(tmp_path, conf):
     out, warnings = build(
-        tmp_path, ".. enum-table:: tests.enums.Plain\n", enum_table_download=[]
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.Plain
+
+        .. enum-table:: tests.enums.Plain
+            :download: json
+        """,
+        **conf,
     )
     assert not warnings
-    assert not soup(out).select("div.enum-table-downloads")
-    assert not (out / "_downloads").exists()
+    page = soup(out)
+    containers = page.select("div.enum-table-container")
+    assert not containers[0].select("div.enum-table-downloads")
+    # tables can still opt in when downloads are disabled globally
+    assert set(downloads(out, page)) == {"Plain.json"}
+
+
+@pytest.mark.parametrize(
+    "setting, expected",
+    [
+        (True, ["Plain.csv", "Plain.json"]),
+        (["json"], ["Plain.json"]),
+        (("JSON", "csv"), ["Plain.json", "Plain.csv"]),
+        ("json, csv", ["Plain.json", "Plain.csv"]),
+        (["json", "csv"], ["Plain.json", "Plain.csv"]),
+    ],
+)
+def test_download_config_values(tmp_path, setting, expected):
+    out, warnings = build(
+        tmp_path, ".. enum-table:: tests.enums.Plain\n", enum_table_download=setting
+    )
+    assert not warnings
+    links = soup(out).select("a.enum-table-download")
+    assert [link["download"] for link in links] == expected
+
+
+@pytest.mark.parametrize("setting", [["xml"], "csv yaml", ["none", "csv"]])
+def test_download_config_invalid(tmp_path, setting):
+    with pytest.raises(ConfigError, match="Invalid enum_table_download"):
+        build(
+            tmp_path, ".. enum-table:: tests.enums.Plain\n", enum_table_download=setting
+        )
 
 
 def test_download_links_relative(tmp_path):
@@ -429,6 +488,7 @@ def test_download_links_relative(tmp_path):
             tmp_path,
             ".. toctree::\n\n   sub/deeper/page\n",
             builder=builder,
+            enum_table_download=True,
         )
         assert not warnings
         page = soup(out, page_path)
@@ -439,7 +499,10 @@ def test_download_links_relative(tmp_path):
 
 def test_singlehtml(tmp_path):
     out, warnings = build(
-        tmp_path, ".. enum-table:: tests.enums.Plain\n", builder="singlehtml"
+        tmp_path,
+        ".. enum-table:: tests.enums.Plain\n",
+        builder="singlehtml",
+        enum_table_download=True,
     )
     assert not warnings
     page = soup(out)
@@ -471,6 +534,7 @@ def test_formatters(tmp_path):
             :formatter: tests.enums:format_paragraph
         """,
         enum_table_formatter="tests.enums.format_hex",
+        enum_table_download=True,
     )
     assert not warnings
     page = soup(out)
@@ -504,6 +568,7 @@ def test_formatter_json_fallback(tmp_path):
             :columns: name parent
             :formatter: tests.test:format_parent
         """,
+        enum_table_download=True,
     )
     assert not warnings
     page = soup(out)
@@ -597,7 +662,10 @@ def test_empty_enum(tmp_path):
 
 def test_text_builder(tmp_path):
     out, warnings = build(
-        tmp_path, ".. enum-table:: tests.enums.Color\n", builder="text"
+        tmp_path,
+        ".. enum-table:: tests.enums.Color\n",
+        builder="text",
+        enum_table_download=True,
     )
     assert not warnings
     text = (out / "index.txt").read_text()
@@ -607,7 +675,10 @@ def test_text_builder(tmp_path):
 
 def test_latex_builder(tmp_path):
     out, warnings = build(
-        tmp_path, ".. enum-table:: tests.enums.Planet\n", builder="latex"
+        tmp_path,
+        ".. enum-table:: tests.enums.Planet\n",
+        builder="latex",
+        enum_table_download=True,
     )
     assert not warnings
     tex = next(out.glob("*.tex")).read_text()
@@ -656,6 +727,7 @@ def test_epub_builder(tmp_path):
         ".. enum-table:: tests.enums.Plain\n",
         builder="epub",
         epub_copyright="test",
+        enum_table_download=True,
     )
     assert "enum-table-download" not in (out / "index.xhtml").read_text()
     assert not (out / "_downloads").exists()
@@ -748,6 +820,7 @@ def test_pdf_build(tmp_path, engine):
         """,
         engine,
         numfig=True,
+        enum_table_download=True,
     )
     assert not warnings
     assert "Missing character" not in log

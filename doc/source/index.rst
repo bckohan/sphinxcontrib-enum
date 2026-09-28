@@ -54,13 +54,13 @@ sphinxcontrib-enum
 
 
 A Sphinx_ directive for documenting dataclass_ enums in tabular format. Each member is a row and
-each dataclass field is a column. Tables can be downloaded as CSV or JSON.
+each dataclass field is a column. Tables can optionally be downloaded as CSV or JSON.
 
 * Documents enums that mix in a dataclass_ or whose values are dataclasses (or named tuples).
 * Columns may be any attribute, property or dotted path on the member or its value.
 * Filter and reorder columns and members, rename headers, add captions and cross references.
 * Customize how cells render with a formatter function.
-* CSV and JSON download buttons (html builders only).
+* Optional CSV and JSON download buttons (html builders only).
 * :ref:`Supports enum-properties <enum_properties>` enums as a special case, and plain enums work
   too.
 
