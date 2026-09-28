@@ -120,9 +120,16 @@ to the default formatting:
 Downloads
 =========
 
-HTML builders render download buttons for CSV and JSON versions of the table below it. Other
-builders (e.g. LaTeX/PDF, text and epub) omit them. Tables render natively in every
-builder, including PDF.
+Tables can offer download buttons for CSV and JSON versions of their data. Downloads are off by
+default. Turn them on for every table with :confval:`enum_table_download`:
+
+.. code-block:: python
+
+   # conf.py
+   enum_table_download = True  # or a list of formats, e.g. ["json"]
+
+HTML builders render the buttons below the table. Other builders (e.g. LaTeX/PDF, text and epub)
+omit them. Tables render natively in every builder, including PDF.
 
 * **CSV** files contain the header row and the display text of every cell, exactly as rendered.
 * **JSON** files contain an object keyed by member name. Each member maps to an object keyed by
@@ -138,13 +145,13 @@ builder, including PDF.
        "VENUS": {"mass": 4.869e+24, "radius": 6051800.0, "moons": 0}
      }
 
-Use :confval:`enum_table_download` to change the default formats for all tables or
-:rst:dir:`enum-table:download` for a single table:
+Use :rst:dir:`enum-table:download` to override the setting for a single table, either to add
+downloads to a table when they are off globally or to remove them when they are on:
 
 .. code-block:: rst
 
    .. enum-table:: examples.Planet
-      :download: json
+      :download: csv, json
 
    .. enum-table:: examples.Planet
       :download: none

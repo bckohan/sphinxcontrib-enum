@@ -89,7 +89,8 @@ Directive
       **default**: :confval:`enum_table_download`
 
       The download formats to offer for this table. Supports ``csv`` and ``json``, or ``none`` to
-      disable downloads.
+      disable downloads. Overrides :confval:`enum_table_download`, which is off by default, so
+      use this to add downloads to individual tables.
 
    .. rst:directive:option:: formatter: import path of a cell formatter
       :type: text

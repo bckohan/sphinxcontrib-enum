@@ -14,6 +14,8 @@ from pathlib import Path
 from docutils import nodes
 from docutils.parsers.rst import directives
 from sphinx.application import Sphinx
+from sphinx.config import Config
+from sphinx.errors import ConfigError
 from sphinx.util import logging
 from sphinx.util.docutils import SphinxDirective, SphinxTranslator
 from sphinx.util.osutil import ensuredir, relative_uri
@@ -34,6 +36,7 @@ __all__ = [
     "DOWNLOAD_FORMATS",
     "EnumTableDirective",
     "Formatter",
+    "download_formats",
     "enum_table_downloads",
 ]
 
@@ -100,9 +103,24 @@ def headers_option(argument: str | None) -> dict[str, str]:
     return headers
 
 
-def download_option(argument: str | None) -> list[str]:
-    formats = [fmt.lower() for fmt in _split(argument)]
-    if formats in ([], ["none"]):
+def download_formats(value: t.Any) -> list[str]:
+    """
+    Normalize a download setting into a list of formats.
+
+    * falsey values (``False``, ``None``, empty) disable downloads
+    * ``True`` enables every supported format
+    * strings are comma or whitespace separated formats (or ``none``)
+    * any other iterable is a collection of formats
+
+    :raises ValueError: If a format is not supported.
+    """
+    if not value:
+        return []
+    if value is True:
+        return list(DOWNLOAD_FORMATS)
+    items = _split(value) if isinstance(value, str) else list(value)
+    formats = [str(fmt).strip().lower() for fmt in items]
+    if formats == ["none"]:
         return []
     for fmt in formats:
         if fmt not in DOWNLOAD_FORMATS:
@@ -111,6 +129,10 @@ def download_option(argument: str | None) -> list[str]:
                 f"expected one of: {', '.join(DOWNLOAD_FORMATS)} or none"
             )
     return list(dict.fromkeys(formats))
+
+
+def download_option(argument: str | None) -> list[str]:
+    return download_formats(argument)
 
 
 def widths_option(argument: str | None) -> str | list[int]:
@@ -218,7 +240,9 @@ class EnumTableDirective(SphinxDirective):
         container = nodes.container(classes=["enum-table-container"])
         container += table
 
-        formats = self.options.get("download", self.config.enum_table_download)
+        formats = self.options.get(
+            "download", download_formats(self.config.enum_table_download)
+        )
         if formats:
             text = [[_text(cell) for cell in row] for row in display]
             contents = {
@@ -450,6 +474,13 @@ def _latex_width_hints(table: nodes.table, rows: list[nodes.row]) -> None:
         colspec["colwidth"] = round(width) + _LATEX_CELL_PADDING
 
 
+def _check_download_config(app: Sphinx, config: Config) -> None:
+    try:
+        download_formats(config.enum_table_download)
+    except (TypeError, ValueError) as err:
+        raise ConfigError(f"Invalid enum_table_download: {err}") from err
+
+
 def setup(app: Sphinx) -> None:
     app.add_node(
         enum_table_downloads,
@@ -458,5 +489,13 @@ def setup(app: Sphinx) -> None:
     app.add_directive("enum-table", EnumTableDirective)
     app.connect("doctree-resolved", _remove_downloads)
     app.connect("doctree-resolved", _wrap_latex_longtables)
-    app.add_config_value("enum_table_download", list(DOWNLOAD_FORMATS), "env")
+    app.add_config_value(
+        "enum_table_download",
+        False,
+        "env",
+        # frozenset/set must not be listed, sphinx converts sequences to frozensets
+        # when they are, losing the format order
+        types=(bool, list, tuple, str, type(None)),
+    )
+    app.connect("config-inited", _check_download_config)
     app.add_config_value("enum_table_formatter", None, "env")
