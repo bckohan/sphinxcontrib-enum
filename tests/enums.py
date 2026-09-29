@@ -1,5 +1,6 @@
+import inspect
 import typing as t
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, IntEnum, IntFlag, StrEnum
 from typing import NamedTuple
 
@@ -164,3 +165,119 @@ Wide = Enum(
     type=Spec,
     module=__name__,
 )
+
+
+# -- member docstrings ---------------------------------------------------------------
+
+
+class Documented(PlanetData, Enum):
+    """The class docstring must never be used as a member docstring."""
+
+    MERCURY = 3.303e23, 2.4397e6
+    """The *smallest* planet, see ``Planet.MERCURY``."""
+
+    #: The hottest planet.
+    VENUS = 4.869e24, 6.0518e6
+
+    EARTH = 5.976e24, 6.37814e6
+
+
+@dataclass(frozen=True)
+class Described:
+    code: str
+    doc: str
+
+
+class DocOverride(Described, Enum):
+    ALPHA = "a", "field doc for alpha"
+    """Docstring for alpha.
+
+    A second paragraph.
+    """
+
+    BETA = "b", "field doc for beta"
+
+
+class DocField(Described, Enum):
+    ALPHA = "a", "field doc for alpha"
+    BETA = "b", "field doc for beta"
+
+
+class ExplicitDoc(Enum):
+    ONE = 1, "Explicit doc for one."
+    TWO = 2, None
+
+    def __init__(self, value, doc):
+        if doc:
+            self.__doc__ = doc
+
+
+class Holder:
+    class Nested(Enum):
+        X = 1
+        """Nested member doc."""
+
+
+def format_doc(member, column, value):
+    if column == "doc":
+        return f"[{value}]"
+    return None
+
+
+# -- column legend -----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LegendBase:
+    mass: float
+    """Mass in *kilograms*."""
+
+
+# python 3.14+ supports dataclasses.field(doc=...)
+FIELD_DOCS = "doc" in inspect.signature(field).parameters
+
+
+@dataclass(frozen=True)
+class LegendData(LegendBase):
+    #: Radius in meters.
+    radius: float
+
+    moons: int = field(default=0, **({"doc": "Number of moons."} if FIELD_DOCS else {}))
+
+    rings: bool = False
+
+
+class LegendPlanet(LegendData, Enum):
+    EARTH = 5.976e24, 6.37814e6, 1
+    """Home."""
+
+    SATURN = 5.683e26, 5.8232e7, 146, True
+
+    @property
+    def density(self) -> float:
+        """Mean density in kg/m³."""
+        return self.mass / (4 / 3 * 3.14159 * self.radius**3)
+
+
+class LegendColor(EnumProperties):
+    label: t.Annotated[str, Symmetric()]
+    """Human readable label."""
+
+    #: Hex code, without the leading ``#``.
+    hex: str
+
+    rgb: tuple[int, int, int]
+
+    RED = 1, "Red", "ff0000", (1, 0, 0)
+    GREEN = 2, "Green", "00ff00", (0, 1, 0)
+
+
+class LegendPoint(NamedTuple):
+    x: int
+    """Horizontal position."""
+
+    y: int
+
+
+class LegendCorner(Enum):
+    ORIGIN = LegendPoint(0, 0)

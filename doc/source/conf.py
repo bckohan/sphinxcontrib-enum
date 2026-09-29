@@ -31,6 +31,7 @@ html_theme_options = {
 }
 
 html_static_path = ["_static"]
+html_css_files = ["style.css"]
 
 todo_include_todos = True
 
@@ -47,3 +48,6 @@ latex_engine = "xelatex"
 
 # show the download buttons on every example table
 enum_table_download = True
+
+# keep a tab open when its label is clicked again
+sphinx_tabs_disable_tab_closing = True

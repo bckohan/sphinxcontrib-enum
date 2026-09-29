@@ -17,6 +17,10 @@ API
 
 .. autofunction:: sphinxcontrib_enum.resolve
 
+.. autofunction:: sphinxcontrib_enum.member_docstrings
+
+.. autofunction:: sphinxcontrib_enum.column_docstrings
+
 .. autofunction:: sphinxcontrib_enum.import_enum
 
 .. autoclass:: sphinxcontrib_enum.EnumTableDirective

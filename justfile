@@ -93,6 +93,11 @@ open-pdf-docs:
 # build and open the pdf documentation
 docs-pdf: build-docs-pdf open-pdf-docs
 
+# regenerate the readme screenshots from the html docs
+readme-images: build-docs-html
+    @just run --no-default-groups --group screenshots --isolated playwright install chromium
+    @just run --no-default-groups --group screenshots --isolated python doc/readme_images.py
+
 # build the docs
 build-docs: build-docs-html
 
@@ -216,11 +221,11 @@ check-all *ENV:
 
 # run all tests in an isolated environment (pass any uv run flags, e.g. -p 3.13)
 test-all *ENV:
-    @just run {{ ENV }} --no-default-groups --exact --all-extras --group test --isolated pytest --cov-append
+    @just run {{ ENV }} --no-default-groups --exact --all-extras --group test --isolated python -X warn_default_encoding -m pytest --cov-append
 
 # run specific tests (project venv)
 test *TESTS:
-    @just run --group test --no-sync pytest {{ TESTS }}
+    @just run --group test --no-sync python -X warn_default_encoding -m pytest {{ TESTS }}
 
 # debug a test
 debug-test *TESTS:

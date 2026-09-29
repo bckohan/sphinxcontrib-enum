@@ -17,6 +17,7 @@ class PlanetData:
     radius: float
     """Radius in meters."""
 
+    #: Number of known moons.
     moons: int
 
 
@@ -43,6 +44,26 @@ class Color(Enum):
 # [dataclass-value]
 
 
+# [docstrings]
+class Severity(IntEnum):
+    DEBUG = 10
+    """Diagnostic detail, usually disabled in production."""
+
+    INFO = 20
+    """Routine operational messages."""
+
+    #: Something unexpected happened that the application **recovered** from.
+    WARNING = 30
+
+    ERROR = 40
+    """A failure that needs attention.
+
+    See :ref:`usage` for how to render these tables."""
+
+    CRITICAL = 50
+# [docstrings]
+
+
 # [plain]
 class Priority(IntEnum):
     LOW = 1
@@ -58,7 +79,10 @@ class Priority(IntEnum):
 # [enum-properties]
 class Shade(EnumProperties):
     label: t.Annotated[str, Symmetric()]
+    """A human readable label."""
+
     hex: t.Annotated[str, Symmetric(case_fold=True)]
+    """The hex color code, without a leading ``#``."""
 
     RED = 1, "Red", "ff0000"
     GREEN = 2, "Green", "00ff00"

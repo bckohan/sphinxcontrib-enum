@@ -59,27 +59,71 @@ each dataclass field is a column. Tables can optionally be downloaded as CSV or 
 * Documents enums that mix in a dataclass_ or whose values are dataclasses (or named tuples).
 * Columns may be any attribute, property or dotted path on the member or its value.
 * Filter and reorder columns and members, rename headers, add captions and cross references.
+* Member docstrings are rendered in a ``doc`` column.
+* Optional :ref:`column legends <column_legend>` from field and property docstrings.
 * Customize how cells render with a formatter function.
 * Optional CSV and JSON download buttons (html builders only).
 * :ref:`Supports enum-properties <enum_properties>` enums as a special case, and plain enums work
   too.
 
-For example, given this dataclass enum:
+For example:
 
-.. literalinclude:: ./examples.py
-   :language: python
-   :start-after: # [dataclass]
-   :end-before: # [dataclass]
+.. tabs::
 
-This directive:
+   .. tab:: Dataclass
 
-.. code-block:: rst
+      Each dataclass field becomes a column, and field docstrings can describe them in a
+      legend:
 
-   .. enum-table:: examples.Planet
+      .. literalinclude:: ./examples.py
+         :language: python
+         :start-after: # [dataclass]
+         :end-before: # [dataclass]
 
-Renders:
+      .. code-block:: rst
 
-.. enum-table:: examples.Planet
+         .. enum-table:: examples.Planet
+            :legend:
+            :download: csv, json
+
+      .. enum-table:: examples.Planet
+         :legend:
+
+   .. tab:: Docstrings
+
+      :ref:`Member docstrings <member_docstrings>` are rendered in a ``doc`` column:
+
+      .. literalinclude:: ./examples.py
+         :language: python
+         :start-after: # [docstrings]
+         :end-before: # [docstrings]
+
+      .. code-block:: rst
+
+         .. enum-table:: examples.Severity
+
+      .. enum-table:: examples.Severity
+         :download:
+
+   .. tab:: enum-properties
+
+      :ref:`enum-properties <enum_properties>` properties become columns, described by their
+      annotation docstrings:
+
+      .. literalinclude:: ./examples.py
+         :language: python
+         :start-after: # [enum-properties]
+         :end-before: # [enum-properties]
+
+      .. code-block:: rst
+
+         .. enum-table:: examples.Shade
+            :legend:
+            :download:
+
+      .. enum-table:: examples.Shade
+         :legend:
+         :download:
 
 .. toctree::
    :maxdepth: 2

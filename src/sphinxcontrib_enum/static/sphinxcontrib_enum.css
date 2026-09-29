@@ -45,3 +45,26 @@
 .enum-table-downloads a.enum-table-download svg {
     flex: none;
 }
+
+/* column legend - a quiet definition list under the table */
+.enum-table-container dl.enum-table-legend {
+    /* wrap to the table's width rather than widening the container */
+    width: 0;
+    min-width: 100%;
+    margin: 0.2em 0 0.6em 0;
+    font-size: 0.85em;
+    color: var(--color-foreground-secondary, inherit);
+}
+
+.enum-table-container dl.enum-table-legend > dt {
+    font-weight: 600;
+}
+
+.enum-table-container dl.enum-table-legend > dd {
+    margin-top: 0;
+    margin-bottom: 0.3em;
+}
+
+.enum-table-container dl.enum-table-legend > dd > p {
+    margin: 0;
+}

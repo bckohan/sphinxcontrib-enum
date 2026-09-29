@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import textwrap
+from enum import Enum
 from pathlib import Path
 
 import pytest
@@ -19,11 +20,22 @@ import sphinxcontrib_enum
 from sphinxcontrib_enum.introspect import (
     default_columns,
     format_value,
+    column_docstrings,
     import_enum,
+    member_docstrings,
     resolve,
     to_json_value,
 )
 from tests.enums import (
+    FIELD_DOCS,
+    LegendColor,
+    LegendCorner,
+    LegendPlanet,
+    DocField,
+    DocOverride,
+    Documented,
+    ExplicitDoc,
+    Holder,
     RGB,
     Color,
     ColorValue,
@@ -51,9 +63,12 @@ def build(tmp_path: Path, rst: str, builder: str = "html", **conf) -> tuple[Path
     src.mkdir(exist_ok=True)
     (src / "conf.py").write_text(
         "extensions = ['sphinxcontrib_enum']\n"
-        + "".join(f"{key} = {value!r}\n" for key, value in conf.items())
+        + "".join(f"{key} = {value!r}\n" for key, value in conf.items()),
+        encoding="utf-8",
     )
-    (src / "index.rst").write_text("Test\n====\n\n" + textwrap.dedent(rst))
+    (src / "index.rst").write_text(
+        "Test\n====\n\n" + textwrap.dedent(rst), encoding="utf-8"
+    )
     out = tmp_path / "out" / builder
     warnings = io.StringIO()
     nocolor()
@@ -73,14 +88,14 @@ def build(tmp_path: Path, rst: str, builder: str = "html", **conf) -> tuple[Path
 
 
 def soup(out: Path, page: str = "index.html") -> BeautifulSoup:
-    return BeautifulSoup((out / page).read_text(), "html.parser")
+    return BeautifulSoup((out / page).read_text(encoding="utf-8"), "html.parser")
 
 
 def table_data(page: BeautifulSoup, idx: int = 0) -> tuple[list[str], list[list[str]]]:
     table = page.select("table.enum-table")[idx]
     headers = [th.get_text(strip=True) for th in table.select("thead th")]
     rows = [
-        [td.get_text(strip=True) for td in tr.select("td")]
+        [" ".join(td.get_text().split()) for td in tr.select("td")]
         for tr in table.select("tbody tr")
     ]
     return headers, rows
@@ -92,7 +107,7 @@ def downloads(out: Path, page: BeautifulSoup, idx: int = 0) -> dict[str, str]:
     for link in container.select("a.enum-table-download"):
         path = (out / link["href"]).resolve()
         assert path.is_file()
-        files[link["download"]] = path.read_text()
+        files[link["download"]] = path.read_text(encoding="utf-8")
     return files
 
 
@@ -406,16 +421,22 @@ def test_download_option(tmp_path):
             :download: JSON
 
         .. enum-table:: tests.enums.Plain
+
+        .. enum-table:: tests.enums.Plain
+            :download:
         """,
         enum_table_download=["csv"],
     )
     assert not warnings
     page = soup(out)
     containers = page.select("div.enum-table-container")
-    assert len(containers) == 3
+    assert len(containers) == 4
     assert not containers[0].select("div.enum-table-downloads")
     assert set(downloads(out, page, 0)) == {"Plain.json"}
     assert set(downloads(out, page, 1)) == {"Plain.csv"}
+    # given without a value, every format is offered
+    links = containers[3].select("a.enum-table-download")
+    assert [link["download"] for link in links] == ["Plain.csv", "Plain.json"]
 
 
 @pytest.mark.parametrize(
@@ -479,7 +500,9 @@ def test_download_config_invalid(tmp_path, setting):
 def test_download_links_relative(tmp_path):
     src = tmp_path / "src" / "sub" / "deeper"
     src.mkdir(parents=True)
-    (src / "page.rst").write_text("Page\n====\n\n.. enum-table:: tests.enums.Plain\n")
+    (src / "page.rst").write_text(
+        "Page\n====\n\n.. enum-table:: tests.enums.Plain\n", encoding="utf-8"
+    )
     for builder, page_path in (
         ("html", "sub/deeper/page.html"),
         ("dirhtml", "sub/deeper/page/index.html"),
@@ -583,6 +606,424 @@ def format_parent(member, column, value):
     return None
 
 
+# -- member docstrings ---------------------------------------------------------------
+
+
+def test_member_docstrings():
+    assert member_docstrings(Documented) == {
+        "MERCURY": "The *smallest* planet, see ``Planet.MERCURY``.",
+        "VENUS": "The hottest planet.",
+    }
+    assert member_docstrings(DocOverride) == {
+        "ALPHA": "Docstring for alpha.\n\nA second paragraph."
+    }
+    assert member_docstrings(ExplicitDoc) == {"ONE": "Explicit doc for one."}
+    assert member_docstrings(Holder.Nested) == {"X": "Nested member doc."}
+    # no member docstrings - the class docstring is never used
+    assert member_docstrings(DocField) == {}
+    assert member_docstrings(Planet) == {}
+    assert member_docstrings(Plain) == {}
+    # enums without source have no member docstrings
+    assert member_docstrings(Enum("Functional", "A B")) == {}
+    assert member_docstrings(Enum("NoSource", "A B", module="no_such_module")) == {}
+
+
+def test_doc_column(tmp_path):
+    out, warnings = build(
+        tmp_path, ".. enum-table:: tests.enums.Documented\n", enum_table_download=True
+    )
+    assert not warnings
+    page = soup(out)
+    headers, rows = table_data(page)
+    assert headers == ["name", "mass", "radius", "doc"]
+    assert [row[-1] for row in rows] == [
+        "The smallest planet, see Planet.MERCURY.",
+        "The hottest planet.",
+        "",
+    ]
+    # docstrings are parsed as restructured text
+    cell = page.select("table.enum-table tbody tr")[0].select("td")[-1]
+    assert cell.em.get_text() == "smallest"
+    assert cell.code.get_text() == "Planet.MERCURY"
+    # downloads get the rendered text
+    files = downloads(out, page)
+    csv_rows = list(csv.reader(io.StringIO(files["Documented.csv"])))
+    assert csv_rows[0] == headers
+    assert [row[-1] for row in csv_rows[1:]] == [row[-1] for row in rows]
+    data = json.loads(files["Documented.json"])
+    assert data["MERCURY"]["doc"] == "The smallest planet, see Planet.MERCURY."
+    assert data["EARTH"]["doc"] == ""
+
+
+def test_doc_column_overrides_existing(tmp_path):
+    out, warnings = build(
+        tmp_path, ".. enum-table:: tests.enums.DocOverride\n", enum_table_download=True
+    )
+    assert not warnings
+    page = soup(out)
+    headers, rows = table_data(page)
+    # the docstring column replaces the doc field in place
+    assert headers == ["name", "code", "doc"]
+    assert rows == [
+        ["ALPHA", "a", "Docstring for alpha. A second paragraph."],
+        ["BETA", "b", ""],
+    ]
+    cell = page.select("table.enum-table tbody tr")[0].select("td")[-1]
+    assert [p.get_text() for p in cell.select("p")] == [
+        "Docstring for alpha.",
+        "A second paragraph.",
+    ]
+    data = json.loads(downloads(out, page)["DocOverride.json"])
+    assert data["ALPHA"]["doc"] == "Docstring for alpha.\n\nA second paragraph."
+
+
+def test_doc_column_without_docstrings(tmp_path):
+    """Without member docstrings a doc column is an ordinary column."""
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.DocField
+
+        .. enum-table:: tests.enums.Planet
+        """,
+    )
+    assert not warnings
+    page = soup(out)
+    assert table_data(page, 0) == (
+        ["name", "code", "doc"],
+        [["ALPHA", "a", "field doc for alpha"], ["BETA", "b", "field doc for beta"]],
+    )
+    assert table_data(page, 1)[0] == ["name", "mass", "radius"]
+
+
+def test_docs_option(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.Documented
+            :docs: false
+
+        .. enum-table:: tests.enums.DocOverride
+            :docs: no
+
+        .. enum-table:: tests.enums.Documented
+            :docs:
+
+        .. enum-table:: tests.enums.Documented
+            :docs: On
+        """,
+    )
+    assert not warnings
+    page = soup(out)
+    assert table_data(page, 0)[0] == ["name", "mass", "radius"]
+    # with docs off an existing doc column shows its own values
+    assert table_data(page, 1)[1][0] == ["ALPHA", "a", "field doc for alpha"]
+    assert table_data(page, 2)[0][-1] == "doc"
+    assert table_data(page, 3)[0][-1] == "doc"
+
+
+def test_doc_column_option(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.DocOverride
+            :doc-column: description
+            :headers: description=Description
+        """,
+        enum_table_download=True,
+    )
+    assert not warnings
+    page = soup(out)
+    headers, rows = table_data(page)
+    # renamed doc column does not override the doc field
+    assert headers == ["name", "code", "doc", "Description"]
+    assert rows[0][2:] == [
+        "field doc for alpha",
+        "Docstring for alpha. A second paragraph.",
+    ]
+    data = json.loads(downloads(out, page)["DocOverride.json"])
+    assert data["ALPHA"]["description"] == "Docstring for alpha.\n\nA second paragraph."
+    assert data["ALPHA"]["doc"] == "field doc for alpha"
+
+
+def test_doc_column_explicit_columns(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.Documented
+            :columns: doc name
+
+        .. enum-table:: tests.enums.Documented
+            :columns: name mass
+
+        .. enum-table:: tests.enums.Documented
+            :exclude: doc
+
+        .. enum-table:: tests.enums.Documented
+            :members: EARTH
+
+        .. enum-table:: tests.enums.Documented
+            :exclude-members: MERCURY
+
+        .. enum-table:: tests.enums.Documented
+            :columns: name doc
+            :docs: false
+        """,
+    )
+    page = soup(out)
+    assert table_data(page, 0) == (
+        ["doc", "name"],
+        [
+            ["The smallest planet, see Planet.MERCURY.", "MERCURY"],
+            ["The hottest planet.", "VENUS"],
+            ["", "EARTH"],
+        ],
+    )
+    # explicit columns do not get the doc column appended
+    assert table_data(page, 1)[0] == ["name", "mass"]
+    assert table_data(page, 2)[0] == ["name", "mass", "radius"]
+    # only rendered members count
+    assert table_data(page, 3)[0] == ["name", "mass", "radius"]
+    assert table_data(page, 4) == (
+        ["name", "mass", "radius", "doc"],
+        [
+            ["VENUS", "4.869e+24", "6051800.0", "The hottest planet."],
+            ["EARTH", "5.976e+24", "6378140.0", ""],
+        ],
+    )
+    # docs off - doc is an ordinary (unresolvable) column
+    assert table_data(page, 5)[0] == ["name"]
+    assert "Unable to resolve column 'doc'" in warnings
+
+
+def test_doc_column_sources(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.ExplicitDoc
+            :exclude: value
+
+        .. enum-table:: tests.enums.Holder.Nested
+        """,
+    )
+    assert not warnings
+    page = soup(out)
+    assert table_data(page, 0) == (
+        ["name", "doc"],
+        [["ONE", "Explicit doc for one."], ["TWO", ""]],
+    )
+    assert table_data(page, 1) == (
+        ["name", "value", "doc"],
+        [["X", "1", "Nested member doc."]],
+    )
+
+
+def test_doc_column_formatter(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.Documented
+            :columns: name doc
+            :formatter: tests.enums.format_doc
+        """,
+    )
+    assert not warnings
+    # formatters receive the raw docstring
+    assert [row[1] for row in table_data(soup(out))[1]] == [
+        "[The *smallest* planet, see ``Planet.MERCURY``.]",
+        "[The hottest planet.]",
+        "[]",
+    ]
+
+
+# -- column legend -------------------------------------------------------------------
+
+
+def legend(page: BeautifulSoup, idx: int = 0) -> list[tuple[str, str]] | None:
+    container = page.select("div.enum-table-container")[idx]
+    dl = container.select_one("dl.enum-table-legend")
+    if dl is None:
+        return None
+    return [
+        (dt.get_text(), " ".join(dd.get_text().split()))
+        for dt, dd in zip(dl.select("dt"), dl.select("dd"))
+    ]
+
+
+def test_column_docstrings():
+    moons = {"moons": "Number of moons."} if FIELD_DOCS else {}
+    assert column_docstrings(
+        LegendPlanet,
+        ["name", "value", "mass", "radius", "moons", "rings", "density", "doc"],
+    ) == {
+        # inherited field
+        "mass": "Mass in *kilograms*.",
+        # comment docs
+        "radius": "Radius in meters.",
+        # dataclasses.field(doc=...)
+        **moons,
+        # property docstrings
+        "density": "Mean density in kg/m³.",
+    }
+    assert column_docstrings(LegendColor, ["name", "value", "label", "hex", "rgb"]) == {
+        "label": "Human readable label.",
+        "hex": "Hex code, without the leading ``#``.",
+    }
+    assert column_docstrings(LegendCorner, ["name", "x", "y"]) == {
+        "x": "Horizontal position."
+    }
+    # properties declared as bases have no docstrings
+    assert column_docstrings(Level, ["label", "abbr", "rank"]) == {}
+    # dotted paths, name and value are never documented
+    assert column_docstrings(LegendCorner, ["value.x", "name", "value"]) == {}
+    assert column_docstrings(Empty, ["name", "value"]) == {}
+
+
+def test_legend(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.LegendPlanet
+            :columns: name mass radius moons rings density doc
+            :headers: mass=Mass
+            :legend:
+        """,
+    )
+    assert not warnings
+    page = soup(out)
+    moons = [("moons", "Number of moons.")] if FIELD_DOCS else []
+    # documented columns in column order, labeled with their headers
+    assert legend(page) == [
+        ("Mass", "Mass in kilograms."),
+        ("radius", "Radius in meters."),
+        *moons,
+        ("density", "Mean density in kg/m³."),
+    ]
+    dl = page.select_one("dl.enum-table-legend")
+    # descriptions are parsed as restructured text
+    assert dl.select_one("dd em").get_text() == "kilograms"
+    # the table is described by its legend
+    table = page.select_one("table.enum-table")
+    assert table["aria-describedby"] == dl["id"]
+    assert table.get("id")
+    # the legend follows the table, before any downloads
+    container = page.select_one("div.enum-table-container")
+    assert [child.name for child in container.find_all(recursive=False)][:2] == [
+        "table",
+        "dl",
+    ]
+
+
+def test_legend_enum_properties_and_namedtuple(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.LegendColor
+            :legend: true
+            :name: colors
+
+        .. enum-table:: tests.enums.LegendCorner
+            :legend: yes
+        """,
+        enum_table_download=True,
+    )
+    assert not warnings
+    page = soup(out)
+    assert legend(page, 0) == [
+        ("label", "Human readable label."),
+        ("hex", "Hex code, without the leading #."),
+    ]
+    assert page.select_one("dl.enum-table-legend code").get_text() == "#"
+    # named tables keep their id
+    table = page.select("table.enum-table")[0]
+    assert table["id"] == "colors"
+    assert table["aria-describedby"] == page.select("dl.enum-table-legend")[0]["id"]
+    assert legend(page, 1) == [("x", "Horizontal position.")]
+    # legends are not included in downloads
+    assert set(downloads(out, page)) == {"LegendColor.csv", "LegendColor.json"}
+    # ids are unique on the page
+    ids = [tag["id"] for tag in page.select("[id]")]
+    assert len(ids) == len(set(ids))
+
+
+def test_legend_off(tmp_path):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.LegendColor
+
+        .. enum-table:: tests.enums.LegendColor
+            :legend: false
+
+        .. enum-table:: tests.enums.Level
+            :legend:
+
+        .. enum-table:: tests.enums.LegendColor
+            :legend:
+            :columns: name rgb
+        """,
+    )
+    assert not warnings
+    page = soup(out)
+    # off by default, can be turned off, and omitted without documented columns
+    for idx in range(4):
+        assert legend(page, idx) is None
+    assert not page.select("table[aria-describedby]")
+
+
+def test_legend_html_visitor_fallbacks():
+    """
+    The aria link is skipped (and the legend still rendered) when the table start tag
+    cannot be found, e.g. with a theme writer that renders tables differently.
+    """
+    from docutils import nodes
+
+    from sphinxcontrib_enum.directive import enum_table_legend, visit_legend_html
+
+    class Writer:
+        def __init__(self, body):
+            self.body = body
+            self.visited = False
+
+        def visit_definition_list(self, node):
+            self.visited = True
+
+    def container(first):
+        legend = enum_table_legend(ids=["legend"])
+        return nodes.container("", first, legend), legend
+
+    # the table's start tag is not in the output
+    _, legend = container(nodes.table(ids=["table"]))
+    writer = Writer(['<div class="wrapper">', '<table class="other" id="elsewhere">'])
+    visit_legend_html(writer, legend)
+    assert writer.visited
+    assert all("aria-describedby" not in chunk for chunk in writer.body)
+
+    # the legend does not follow a table
+    _, legend = container(nodes.paragraph())
+    writer = Writer(['<table id="table">'])
+    visit_legend_html(writer, legend)
+    assert writer.visited
+    assert writer.body == ['<table id="table">']
+
+
+@pytest.mark.parametrize("builder, filename", [("text", "index.txt"), ("latex", None)])
+def test_legend_other_builders(tmp_path, builder, filename):
+    out, warnings = build(
+        tmp_path,
+        """
+        .. enum-table:: tests.enums.LegendColor
+            :legend:
+        """,
+        builder=builder,
+    )
+    assert not warnings
+    path = out / filename if filename else next(out.glob("*.tex"))
+    text = path.read_text(encoding="utf-8")
+    assert "Human readable label." in text
+    assert "aria-describedby" not in text
+
+
 # -- directive: warnings -----------------------------------------------------------------
 
 
@@ -637,6 +1078,9 @@ def test_warnings(tmp_path, rst, conf, message):
 @pytest.mark.parametrize(
     "option",
     [
+        ":docs: maybe",
+        ":legend: sometimes",
+        ":doc-column:",
         ":download: xml",
         ":headers: nope",
         ":headers: =Header",
@@ -668,7 +1112,7 @@ def test_text_builder(tmp_path):
         enum_table_download=True,
     )
     assert not warnings
-    text = (out / "index.txt").read_text()
+    text = (out / "index.txt").read_text(encoding="utf-8")
     assert "ff0000" in text
     assert "CSV" not in text and "JSON" not in text
 
@@ -681,7 +1125,7 @@ def test_latex_builder(tmp_path):
         enum_table_download=True,
     )
     assert not warnings
-    tex = next(out.glob("*.tex")).read_text()
+    tex = next(out.glob("*.tex")).read_text(encoding="utf-8")
     assert "MERCURY" in tex
     assert "enum-table-download" not in tex
 
@@ -704,7 +1148,7 @@ def test_latex_longtable_widths(tmp_path):
     """
     out, warnings = build(tmp_path, rst, builder="latex")
     assert not warnings
-    tex = next(out.glob("*.tex")).read_text()
+    tex = next(out.glob("*.tex")).read_text(encoding="utf-8")
     # small tables still use tabulary
     assert "\\begin{tabulary}" in tex
     longtables = tex.split("\\begin{longtable}")[1:]
@@ -729,7 +1173,9 @@ def test_epub_builder(tmp_path):
         epub_copyright="test",
         enum_table_download=True,
     )
-    assert "enum-table-download" not in (out / "index.xhtml").read_text()
+    assert "enum-table-download" not in (out / "index.xhtml").read_text(
+        encoding="utf-8"
+    )
     assert not (out / "_downloads").exists()
 
 
@@ -738,10 +1184,10 @@ def test_rebuild_refreshes_static(tmp_path):
     out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Plain\n")
     assert not warnings
     css = out / "_static" / "sphinxcontrib_enum.css"
-    css.write_text("stale")
+    css.write_text("stale", encoding="utf-8")
     out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Plain\n")
     assert not warnings
-    assert css.read_text() != "stale"
+    assert css.read_text(encoding="utf-8") != "stale"
 
 
 # -- pdf ------------------------------------------------------------------------------------
@@ -774,7 +1220,9 @@ def build_pdf(tmp_path: Path, rst: str, engine: str, **conf) -> tuple[Path, str,
         ["make", "all-pdf"],
         cwd=out,
         capture_output=True,
-        text=True,
+        # latex output is not guaranteed to be valid utf-8
+        encoding="utf-8",
+        errors="replace",
         env={
             **os.environ,
             "LATEXOPTS": "-interaction=nonstopmode -halt-on-error",
@@ -784,7 +1232,7 @@ def build_pdf(tmp_path: Path, rst: str, engine: str, **conf) -> tuple[Path, str,
     assert result.returncode == 0 and pdfs, (
         result.stdout[-3000:] + result.stderr[-3000:]
     )
-    log = next(out.glob("*.log")).read_text(errors="replace")
+    log = next(out.glob("*.log")).read_text(encoding="utf-8", errors="replace")
     return pdfs[0], warnings, log
 
 
@@ -817,6 +1265,13 @@ def test_pdf_build(tmp_path, engine):
         .. enum-table:: tests.enums.ColorValue
             :columns: name value
             :widths: 1 3
+
+        .. enum-table:: tests.enums.Documented
+
+        .. enum-table:: tests.enums.DocOverride
+
+        .. enum-table:: tests.enums.LegendPlanet
+            :legend:
         """,
         engine,
         numfig=True,
@@ -840,6 +1295,14 @@ def test_pdf_build(tmp_path, engine):
     assert squash("Medium, Mostly") in flat
     assert squash("Label & Name") in flat
     assert squash("RGB(r=255, g=0, b=0)") in flat
+    # parsed member docstrings, including multiple paragraphs in one cell
+    assert squash("The smallest planet, see Planet.MERCURY.") in flat
+    assert squash("The hottest planet.") in flat
+    assert squash("Docstring for alpha.") in flat
+    assert squash("A second paragraph.") in flat
+    # column legends
+    assert squash("Mass in kilograms.") in flat
+    assert squash("Radius in meters.") in flat
     # download buttons are html only
     assert "CSV" not in text and "JSON" not in text
 
@@ -855,7 +1318,7 @@ def test_pdf_longtable(tmp_path, engine):
         tmp_path, ".. enum-table:: tests.enums.Wide\n", engine
     )
     assert not warnings
-    tex = next(pdf.parent.glob("*.tex")).read_text()
+    tex = next(pdf.parent.glob("*.tex")).read_text(encoding="utf-8")
     assert "\\begin{longtable}" in tex
     reader = PdfReader(pdf)
     table_pages = [

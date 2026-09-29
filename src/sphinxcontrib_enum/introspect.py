@@ -1,25 +1,32 @@
 """
 Introspection utilities for discovering the tabular structure of an enumeration.
 
-These functions have no dependency on Sphinx or docutils and determine which columns
-an enumeration exposes and how to fetch and serialize each cell.
+These functions determine which columns an enumeration exposes, how to fetch and
+serialize each cell and where member docstrings come from. They do not depend on
+docutils and only use Sphinx to read docstrings from source.
 """
 
 import csv
 import dataclasses
+import inspect
 import io
 import json
 import typing as t
 from enum import Enum
 from importlib import import_module
 
+from sphinx.errors import PycodeError
+from sphinx.pycode import ModuleAnalyzer
+
 __all__ = [
     "NAME",
     "VALUE",
+    "column_docstrings",
     "default_columns",
     "format_value",
     "import_enum",
     "is_structured",
+    "member_docstrings",
     "resolve",
     "to_csv",
     "to_json",
@@ -84,6 +91,95 @@ def _import_object(path: str) -> t.Any:
             obj = getattr(obj, attr)
         return obj
     raise ImportError(f"No module found in {path!r}")
+
+
+def member_docstrings(enum_cls: type[Enum]) -> dict[str, str]:
+    """
+    Find the docstrings of an enumeration's members, keyed by member name.
+
+    Python does not give enum members their own docstrings (``member.__doc__`` is
+    the class docstring), so docstrings are found the same way autodoc finds them,
+    in order of precedence:
+
+    1. A ``__doc__`` attribute set explicitly on the member instance (e.g. by the
+       enum's ``__init__``).
+    2. A string literal immediately after the member's assignment, or a ``#:``
+       comment before it, in the enum's source code.
+
+    Members without a docstring are not included. Docstrings are dedented and
+    stripped but otherwise returned verbatim (they are usually reStructuredText).
+    """
+    docs: dict[str, str] = {}
+    try:
+        analyzer = ModuleAnalyzer.for_module(enum_cls.__module__)
+        attr_docs = analyzer.find_attr_docs()
+    except PycodeError:
+        attr_docs = {}
+    for member in enum_cls:
+        explicit = getattr(member, "__dict__", {}).get("__doc__")
+        if isinstance(explicit, str) and explicit.strip():
+            docs[member.name] = inspect.cleandoc(explicit)
+            continue
+        lines = attr_docs.get((enum_cls.__qualname__, member.name))
+        if lines and "".join(lines).strip():
+            docs[member.name] = inspect.cleandoc("\n".join(lines))
+    return docs
+
+
+def _attr_docs(cls: type) -> dict[tuple[str, str], list[str]]:
+    try:
+        return ModuleAnalyzer.for_module(cls.__module__).find_attr_docs()
+    except PycodeError:
+        return {}
+
+
+def _column_doc(classes: t.Iterable[type], column: str) -> str | None:
+    for cls in classes:
+        if cls is object:
+            continue
+        field = getattr(cls, "__dataclass_fields__", {}).get(column)
+        # python 3.14+ supports dataclasses.field(doc=...)
+        explicit = getattr(field, "doc", None)
+        if isinstance(explicit, str) and explicit.strip():
+            return inspect.cleandoc(explicit)
+        lines = _attr_docs(cls).get((cls.__qualname__, column))
+        if lines and "".join(lines).strip():
+            return inspect.cleandoc("\n".join(lines))
+        attr = cls.__dict__.get(column)
+        if isinstance(attr, property) and attr.__doc__ and attr.__doc__.strip():
+            return inspect.cleandoc(attr.__doc__)
+    return None
+
+
+def column_docstrings(enum_cls: type[Enum], columns: t.Iterable[str]) -> dict[str, str]:
+    """
+    Find descriptions of an enumeration's columns, keyed by column name.
+
+    Each column is looked up on the enum's classes (including any dataclass mixin
+    and its bases) and then, if the member values are dataclasses or named tuples,
+    on the value's classes. For each class, in order of precedence:
+
+    1. ``dataclasses.field(doc=...)`` (Python 3.14+).
+    2. A string literal immediately after the attribute, or a ``#:`` comment before
+       it, in source. This covers dataclass fields, named tuple fields and
+       enum-properties property annotations.
+    3. The docstring of a :class:`property` defined on the class.
+
+    The ``name`` and ``value`` pseudo-columns and dotted column paths have no
+    descriptions. Columns without a description are not included.
+    """
+    classes: list[type] = list(enum_cls.__mro__)
+    first = next(iter(enum_cls), None)
+    if first is not None and is_structured(first.value):
+        classes.extend(type(first.value).__mro__)
+    docs = {}
+    for column in columns:
+        if column in (NAME, VALUE) or "." in column:
+            continue
+        doc = _column_doc(classes, column)
+        if doc:
+            docs[column] = doc
+    return docs
 
 
 def is_structured(value: t.Any) -> bool:

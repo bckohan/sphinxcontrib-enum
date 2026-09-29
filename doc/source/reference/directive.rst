@@ -22,6 +22,9 @@ Directive
          :widths: auto
          :download: csv, json
          :formatter: import.path.to.formatter
+         :docs: true
+         :doc-column: doc
+         :legend: true
 
    The only required argument is the import path of the enumeration. The module may be separated
    from the class with a ``:`` (``pkg.module:Outer.Enum``) or dots may be used throughout
@@ -36,7 +39,9 @@ Directive
       The columns to render, in order. The pseudo-columns ``name`` and ``value`` are the member's
       name and value. Any other column is an attribute (or dotted attribute path) of the member,
       falling back to its value. Defaults to ``name``, any dataclass fields, ``value`` (only when the
-      values are not dataclasses or named tuples), and any enum-properties_ properties.
+      values are not dataclasses or named tuples), any enum-properties_ properties and the
+      :rst:dir:`doc column <enum-table:doc-column>` if any member has a docstring. When given,
+      the doc column is only included where it is listed.
 
    .. rst:directive:option:: exclude: columns to drop
       :type: list
@@ -89,8 +94,39 @@ Directive
       **default**: :confval:`enum_table_download`
 
       The download formats to offer for this table. Supports ``csv`` and ``json``, or ``none`` to
-      disable downloads. Overrides :confval:`enum_table_download`, which is off by default, so
-      use this to add downloads to individual tables.
+      disable downloads. Given without a value, every format is offered. Overrides
+      :confval:`enum_table_download`, which is off by default, so use this to add downloads to
+      individual tables.
+
+   .. rst:directive:option:: docs: include member docstrings
+      :type: true or false
+
+      **default**: ``true``
+
+      Whether to add a column with the members' docstrings. The column is only added if at least
+      one rendered member has a docstring. Accepts ``true``/``false``, ``yes``/``no``,
+      ``on``/``off`` or ``1``/``0``. Given without a value it is ``true``. See
+      :ref:`member_docstrings`.
+
+   .. rst:directive:option:: doc-column: name of the docstring column
+      :type: text
+
+      **default**: ``doc``
+
+      The name of the column that holds member docstrings. This is its header (unless overridden
+      with :rst:dir:`enum-table:headers`), its key in JSON downloads and the name to use in
+      :rst:dir:`enum-table:columns` and :rst:dir:`enum-table:exclude`. The docstrings override any
+      other column with this name.
+
+   .. rst:directive:option:: legend: describe the columns beneath the table
+      :type: true or false
+
+      **default**: ``false``
+
+      Render a legend beneath the table that describes each documented column, using the
+      docstrings of dataclass fields, enum-properties property annotations, named tuple fields
+      and properties. Accepts the same values as :rst:dir:`enum-table:docs`. See
+      :ref:`column_legend`.
 
    .. rst:directive:option:: formatter: import path of a cell formatter
       :type: text

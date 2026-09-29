@@ -19,12 +19,15 @@ from sphinx.errors import ConfigError
 from sphinx.util import logging
 from sphinx.util.docutils import SphinxDirective, SphinxTranslator
 from sphinx.util.osutil import ensuredir, relative_uri
+from sphinx.util.parsing import nested_parse_to_nodes
 
 from .introspect import (
     NAME,
+    column_docstrings,
     default_columns,
     format_value,
     import_enum,
+    member_docstrings,
     resolve,
     to_csv,
     to_json,
@@ -32,15 +35,20 @@ from .introspect import (
 )
 
 __all__ = [
+    "DEFAULT_DOC_COLUMN",
     "DOWNLOAD_DIR",
     "DOWNLOAD_FORMATS",
     "EnumTableDirective",
     "Formatter",
     "download_formats",
     "enum_table_downloads",
+    "enum_table_legend",
 ]
 
 logger = logging.getLogger(__name__)
+
+Cell: t.TypeAlias = str | nodes.Node | list[nodes.Node]
+"""A rendered table cell: text, a node or a list of body nodes (parsed docstrings)."""
 
 Formatter = t.Callable[[Enum, str, t.Any], "str | nodes.Node | None"]
 """
@@ -48,6 +56,9 @@ The signature of a cell formatter. Formatters are passed the enum member, the
 column name and the raw column value and return either the display text, a
 docutils node or ``None`` to fall back to the default formatting.
 """
+
+DEFAULT_DOC_COLUMN = "doc"
+"""The default name of the column that holds member docstrings."""
 
 DOWNLOAD_FORMATS = ("csv", "json")
 """The supported download formats."""
@@ -64,6 +75,14 @@ _DOWNLOAD_ICON = (
     "8.44V1.75A.75.75 0 0 1 8 1ZM2.75 12.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5"
     'H2.75Z"/></svg>'
 )
+
+
+class enum_table_legend(nodes.definition_list):
+    """
+    A definition list describing the table's columns. Builders render it as a
+    definition list, the html writer also links it to its table with
+    ``aria-describedby`` so assistive technology announces it with the table.
+    """
 
 
 class enum_table_downloads(nodes.General, nodes.Element):
@@ -132,7 +151,20 @@ def download_formats(value: t.Any) -> list[str]:
 
 
 def download_option(argument: str | None) -> list[str]:
+    """Given without a value (like the other boolean options) offer every format."""
+    if not (argument or "").strip():
+        return list(DOWNLOAD_FORMATS)
     return download_formats(argument)
+
+
+def bool_option(argument: str | None) -> bool:
+    """A boolean option, given without a value it is ``True``."""
+    value = (argument or "true").strip().lower()
+    if value in ("true", "yes", "on", "1"):
+        return True
+    if value in ("false", "no", "off", "0"):
+        return False
+    raise ValueError(f"expected true or false, got {argument!r}")
 
 
 def widths_option(argument: str | None) -> str | list[int]:
@@ -167,6 +199,9 @@ class EnumTableDirective(SphinxDirective):
             :widths: auto
             :download: csv, json
             :formatter: import.path.to.formatter
+            :docs: true
+            :doc-column: doc
+            :legend: true
     """
 
     required_arguments = 1
@@ -185,6 +220,9 @@ class EnumTableDirective(SphinxDirective):
         "widths": widths_option,
         "download": download_option,
         "formatter": directives.unchanged_required,
+        "docs": bool_option,
+        "legend": bool_option,
+        "doc-column": directives.unchanged_required,
     }
 
     def run(self) -> list[nodes.Node]:
@@ -208,20 +246,39 @@ class EnumTableDirective(SphinxDirective):
             return self._warn(f"Unable to import formatter: {err}")
 
         members = self._members(enum_cls)
-        columns = self._columns(enum_cls, members)
+        doc_column = self.options.get("doc-column", DEFAULT_DOC_COLUMN).strip()
+        docs: dict[str, str] = {}
+        if self.options.get("docs", True):
+            docs = {
+                name: doc
+                for name, doc in member_docstrings(enum_cls).items()
+                if name in {member.name for member in members}
+            }
+        # the doc column only exists if a rendered member has a docstring, otherwise
+        # its name is an ordinary column
+        doc_col = doc_column if docs else None
+
+        columns = self._columns(enum_cls, members, doc_col)
         if not columns:
             return self._warn(f"No columns to render for {enum_cls.__qualname__}.")
 
         headers = self._headers(columns)
-        display: list[list[str | nodes.Node]] = []
+        display: list[list[Cell]] = []
         raw: list[list[t.Any]] = []
         for member in members:
             display.append([])
             raw.append([])
             for column in columns:
-                value = resolve(member, column)
+                if column == doc_col:
+                    value = docs.get(member.name, "")
+                else:
+                    value = resolve(member, column)
                 cell = formatter(member, column, value) if formatter else None
-                if cell is None:
+                if cell is None and column == doc_col:
+                    cell = self._parse_doc(enum_cls, member, value)
+                    # downloads get the rendered text rather than the markup
+                    value = _text(cell)
+                elif cell is None:
                     cell = format_value(value)
                 display[-1].append(cell)
                 raw[-1].append(value)
@@ -239,6 +296,13 @@ class EnumTableDirective(SphinxDirective):
 
         container = nodes.container(classes=["enum-table-container"])
         container += table
+        if self.options.get("legend", False):
+            legend = self._legend(enum_cls, columns, headers)
+            if legend is not None:
+                # the html writer links the table to its legend by id
+                if not table["ids"]:
+                    self.state.document.set_id(table)
+                container += legend
 
         formats = self.options.get(
             "download", download_formats(self.config.enum_table_download)
@@ -283,12 +347,64 @@ class EnumTableDirective(SphinxDirective):
         exclude = set(self.options.get("exclude-members", []))
         return [member for member in members if member.name not in exclude]
 
-    def _columns(self, enum_cls: type[Enum], members: list[Enum]) -> list[str]:
-        columns = self.options.get("columns", None) or default_columns(enum_cls)
+    def _legend(
+        self, enum_cls: type[Enum], columns: list[str], headers: list[str]
+    ) -> enum_table_legend | None:
+        """A definition list of the documented columns, in column order."""
+        docs = column_docstrings(enum_cls, columns)
+        if not docs:
+            return None
+        legend = enum_table_legend(classes=["enum-table-legend"])
+        for column, header in zip(columns, headers):
+            if column not in docs:
+                continue
+            item = nodes.definition_list_item()
+            item += nodes.term(header, header)
+            definition = nodes.definition()
+            definition += nested_parse_to_nodes(
+                self.state,
+                docs[column],
+                source=f"docstring of {enum_cls.__module__}.{enum_cls.__qualname__}"
+                f".{column}",
+                allow_section_headings=False,
+            )
+            item += definition
+            legend += item
+        self.state.document.set_id(legend)
+        return legend
+
+    def _parse_doc(self, enum_cls: type[Enum], member: Enum, doc: str) -> Cell:
+        """Parse a member docstring as reStructuredText, like autodoc does."""
+        if not doc:
+            return ""
+        return nested_parse_to_nodes(
+            self.state,
+            doc,
+            source=f"docstring of {enum_cls.__module__}.{enum_cls.__qualname__}"
+            f".{member.name}",
+            allow_section_headings=False,
+        )
+
+    def _columns(
+        self, enum_cls: type[Enum], members: list[Enum], doc_col: str | None
+    ) -> list[str]:
+        """
+        The columns to render. When members have docstrings (``doc_col`` is set) the
+        doc column replaces a default column of the same name in place, or is
+        appended. Explicit ``:columns:`` include it only where it is listed.
+        """
+        columns = self.options.get("columns", None)
+        if not columns:
+            columns = default_columns(enum_cls)
+            if doc_col and doc_col not in columns:
+                columns.append(doc_col)
         exclude = set(self.options.get("exclude", []))
         resolved = []
         for column in columns:
             if column in exclude:
+                continue
+            if column == doc_col:
+                resolved.append(column)
                 continue
             try:
                 for member in members:
@@ -313,7 +429,7 @@ class EnumTableDirective(SphinxDirective):
         self,
         headers: list[str],
         columns: list[str],
-        rows: list[list[str | nodes.Node]],
+        rows: list[list[Cell]],
     ) -> nodes.table:
         widths = self.options.get("widths", "auto")
         table = nodes.table(classes=["enum-table", *self.options.get("class", [])])
@@ -364,7 +480,7 @@ class EnumTableDirective(SphinxDirective):
         return table
 
     @staticmethod
-    def _row(cells: list[nodes.Node]) -> nodes.row:
+    def _row(cells: list[nodes.Node | list[nodes.Node]]) -> nodes.row:
         row = nodes.row()
         for cell in cells:
             entry = nodes.entry()
@@ -373,8 +489,12 @@ class EnumTableDirective(SphinxDirective):
         return row
 
 
-def _text(cell: "str | nodes.Node") -> str:
-    return cell if isinstance(cell, str) else cell.astext()
+def _text(cell: Cell) -> str:
+    if isinstance(cell, str):
+        return cell
+    if isinstance(cell, list):
+        return "\n\n".join(node.astext() for node in cell)
+    return cell.astext()
 
 
 def _json(value: t.Any, text: str) -> t.Any:
@@ -387,7 +507,9 @@ def _json(value: t.Any, text: str) -> t.Any:
     )
 
 
-def _cell(cell: "str | nodes.Node", literal: bool = False) -> nodes.Node:
+def _cell(cell: Cell, literal: bool = False) -> nodes.Node | list[nodes.Node]:
+    if isinstance(cell, list):
+        return cell
     if isinstance(cell, str):
         cell = nodes.literal(cell, cell) if literal else nodes.Text(cell)
     elif isinstance(cell, nodes.Body):
@@ -422,6 +544,31 @@ def visit_downloads_html(self: SphinxTranslator, node: enum_table_downloads) -> 
         f'<div class="enum-table-downloads">{"".join(links)}</div>'
     )
     raise nodes.SkipNode
+
+
+def visit_legend_html(self: SphinxTranslator, node: enum_table_legend) -> None:
+    """
+    Link the preceding table to this legend with ``aria-describedby``. The table has
+    already been written, so its start tag is patched in the output rather than
+    overriding the table visitor (which themes may customize).
+    """
+    table = node.parent[node.parent.index(node) - 1] if node.parent else None
+    if isinstance(table, nodes.table) and table["ids"] and node["ids"]:
+        table_id = f' id="{table["ids"][0]}"'
+        for idx in range(len(self.body) - 1, -1, -1):  # type: ignore[attr-defined]
+            chunk = self.body[idx]  # type: ignore[attr-defined]
+            if chunk.startswith("<table") and table_id in chunk:
+                self.body[idx] = chunk.replace(  # type: ignore[attr-defined]
+                    "<table",
+                    f'<table aria-describedby="{escape(node["ids"][0])}"',
+                    1,
+                )
+                break
+    self.visit_definition_list(node)  # type: ignore[attr-defined]
+
+
+def depart_legend_html(self: SphinxTranslator, node: enum_table_legend) -> None:
+    self.depart_definition_list(node)  # type: ignore[attr-defined]
 
 
 def _remove_downloads(app: Sphinx, doctree: nodes.document, docname: str) -> None:
@@ -486,6 +633,8 @@ def setup(app: Sphinx) -> None:
         enum_table_downloads,
         html=(visit_downloads_html, None),
     )
+    # other builders fall back to their definition_list visitors
+    app.add_node(enum_table_legend, html=(visit_legend_html, depart_legend_html))
     app.add_directive("enum-table", EnumTableDirective)
     app.connect("doctree-resolved", _remove_downloads)
     app.connect("doctree-resolved", _wrap_latex_longtables)

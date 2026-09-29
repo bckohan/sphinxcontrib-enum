@@ -1,6 +1,6 @@
 [project]
 name = "sphinxcontrib-enum"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sphinx directive for documenting dataclass enums in tabular format, with support for enum-properties."
 requires-python = ">=3.11,<4.0"
 authors = [
@@ -81,6 +81,8 @@ lint = [
     "doc8>=1.1.2",
 ]
 coverage  = ["coverage[toml]>=7.6.1"]
+# regenerating the readme screenshots (just readme-images)
+screenshots = ["playwright>=1.40"]
 test = [
     { include-group = "coverage" },
     "beautifulsoup4>=4.12.0",
@@ -121,6 +123,13 @@ sphinx = true
 [tool.pytest.ini_options]
 python_files = "test*.py"
 norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__"
+# with -X warn_default_encoding (the justfile test recipes set it) our file io that
+# relies on the locale's encoding fails, it is not utf-8 on windows
+filterwarnings = [
+    "error::EncodingWarning:tests",
+    "error::EncodingWarning:tests\\..*",
+    "error::EncodingWarning:sphinxcontrib_enum.*",
+]
 addopts = [
     "--strict-markers",
     "--cov=sphinxcontrib_enum",
