@@ -1179,6 +1179,33 @@ def test_epub_builder(tmp_path):
     assert not (out / "_downloads").exists()
 
 
+@pytest.mark.parametrize(
+    "theme, theme_css",
+    [
+        ("furo", "sphinxcontrib_enum_furo.css"),
+        ("alabaster", None),
+    ],
+)
+def test_theme_css(tmp_path, theme, theme_css):
+    """Theme specific stylesheets are only loaded for their theme."""
+    out, warnings = build(
+        tmp_path, ".. enum-table:: tests.enums.Plain\n", html_theme=theme
+    )
+    assert not warnings
+    links = [
+        link["href"].split("?")[0]
+        for link in soup(out).select('link[rel="stylesheet"]')
+        if "sphinxcontrib_enum" in link["href"]
+    ]
+    expected = ["_static/sphinxcontrib_enum.css"]
+    if theme_css:
+        expected.append(f"_static/{theme_css}")
+    # the theme stylesheet follows (and so overrides) the base stylesheet
+    assert links == expected
+    for href in links:
+        assert (out / href).is_file()
+
+
 def test_rebuild_refreshes_static(tmp_path):
     """Rebuilding into the same output directory must not warn about static files."""
     out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Plain\n")

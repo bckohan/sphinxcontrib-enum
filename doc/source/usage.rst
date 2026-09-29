@@ -242,6 +242,35 @@ a value it offers every format:
    .. enum-table:: examples.Planet
       :download: none
 
+.. _theme_styling:
+
+Theme Styling
+=============
+
+Tables are ordinary Sphinx tables, so they are styled by your html theme. The extension adds a
+small theme-neutral stylesheet for the layout of the legend and the download buttons, and extra
+styles for themes it knows:
+
+* furo_ - striped rows, a row hover highlight, left-aligned headers and a visible table edge in
+  dark mode. These use furo's color variables, so they follow its light, dark and auto modes.
+
+Every rendered table is a ``table.enum-table`` inside a ``div.enum-table-container``. To change
+the styling, add your own stylesheet with :confval:`html_css_files <sphinx:html_css_files>`, it
+is loaded after the extension's stylesheets:
+
+.. code-block:: python
+
+   # conf.py
+   html_static_path = ["_static"]
+   html_css_files = ["custom.css"]
+
+.. code-block:: css
+
+   /* _static/custom.css - turn off the striped rows */
+   .enum-table-container table.enum-table > tbody > tr:nth-child(even) {
+       background: none;
+   }
+
 .. _enum_properties:
 
 enum-properties Enums

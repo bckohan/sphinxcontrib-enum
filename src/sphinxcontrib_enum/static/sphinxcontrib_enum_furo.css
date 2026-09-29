@@ -1,0 +1,36 @@
+/*
+ * sphinxcontrib-enum: enum-table styles for the furo theme.
+ *
+ * Loaded (after sphinxcontrib_enum.css) only when html_theme = "furo". Colors use
+ * furo's variables, which furo redefines for dark mode, so these rules follow the
+ * light, dark and auto (system preference) modes without separate dark rules.
+ */
+
+/* striped rows make wide tables easier to scan */
+.enum-table-container table.enum-table > tbody > tr:nth-child(even) {
+    background: var(--color-background-secondary);
+}
+
+.enum-table-container table.enum-table > tbody > tr:hover {
+    background: var(--color-background-hover);
+}
+
+/* align header text with the cell content below it */
+.enum-table-container table.enum-table > thead th {
+    text-align: left;
+}
+
+/*
+ * furo's table shadow is too faint to see on its dark background, give tables a
+ * visible edge in dark mode. Furo's dark mode is either chosen explicitly
+ * (data-theme="dark") or follows the system preference (data-theme="auto").
+ */
+body[data-theme="dark"] .enum-table-container table.enum-table {
+    box-shadow: 0 0 0 1px var(--color-table-border);
+}
+
+@media (prefers-color-scheme: dark) {
+    body[data-theme="auto"] .enum-table-container table.enum-table {
+        box-shadow: 0 0 0 1px var(--color-table-border);
+    }
+}
