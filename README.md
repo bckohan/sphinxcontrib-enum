@@ -37,7 +37,9 @@ extensions = [
 
 ## Quick Start
 
-Given a dataclass enum:
+### Dataclass Enums
+
+Each dataclass field becomes a column. Field docstrings can describe the columns in an optional legend:
 
 ```python
 from dataclasses import dataclass
@@ -47,30 +49,110 @@ from enum import Enum
 @dataclass(frozen=True)
 class PlanetData:
     mass: float
+    """Mass in kilograms."""
+
     radius: float
+    """Radius in meters."""
+
+    #: Number of known moons.
+    moons: int
 
 
 class Planet(PlanetData, Enum):
-    MERCURY = 3.303e23, 2.4397e6
-    VENUS = 4.869e24, 6.0518e6
-    EARTH = 5.976e24, 6.37814e6
+    MERCURY = 3.303e23, 2.4397e6, 0
+    VENUS = 4.869e24, 6.0518e6, 0
+    EARTH = 5.976e24, 6.37814e6, 1
+    MARS = 6.421e23, 3.3972e6, 2
 ```
-
-Document it with:
 
 ```rst
 .. enum-table:: mypackage.Planet
-   :caption: The inner planets.
+   :legend:
+   :download:
 ```
 
-Which renders a table with `name`, `mass` and `radius` columns. Columns, members, headers, widths, download formats and cell formatting can all be customized:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bckohan/sphinxcontrib-enum/main/doc/images/dataclass-dark.png">
+  <img alt="The Planet enum rendered as a table with name, mass, radius and moons columns, a legend describing each column and CSV and JSON download buttons" src="https://raw.githubusercontent.com/bckohan/sphinxcontrib-enum/main/doc/images/dataclass-light.png" width="380">
+</picture>
+
+### Member Docstrings
+
+Member docstrings are rendered in a `doc` column. They are parsed as reStructuredText:
+
+```python
+from enum import IntEnum
+
+
+class Severity(IntEnum):
+    DEBUG = 10
+    """Diagnostic detail, usually disabled in production."""
+
+    INFO = 20
+    """Routine operational messages."""
+
+    #: Something unexpected happened that the application **recovered** from.
+    WARNING = 30
+
+    ERROR = 40
+    """A failure that needs attention.
+
+    See :ref:`usage` for how to render these tables."""
+
+    CRITICAL = 50
+```
+
+```rst
+.. enum-table:: mypackage.Severity
+   :download:
+```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bckohan/sphinxcontrib-enum/main/doc/images/docstrings-dark.png">
+  <img alt="The Severity enum rendered as a table with name, value and doc columns, the doc column holding each member's rendered docstring" src="https://raw.githubusercontent.com/bckohan/sphinxcontrib-enum/main/doc/images/docstrings-light.png" width="713">
+</picture>
+
+### enum-properties
+
+[enum-properties](https://enum-properties.readthedocs.io) properties become columns, described by their annotation docstrings:
+
+```python
+import typing as t
+
+from enum_properties import EnumProperties, Symmetric
+
+
+class Shade(EnumProperties):
+    label: t.Annotated[str, Symmetric()]
+    """A human readable label."""
+
+    hex: t.Annotated[str, Symmetric(case_fold=True)]
+    """The hex color code, without a leading ``#``."""
+
+    RED = 1, "Red", "ff0000"
+    GREEN = 2, "Green", "00ff00"
+    BLUE = 3, "Blue", "0000ff"
+```
+
+```rst
+.. enum-table:: mypackage.Shade
+   :legend:
+   :download:
+```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bckohan/sphinxcontrib-enum/main/doc/images/enum-properties-dark.png">
+  <img alt="The Shade enum rendered as a table with name, value, label and hex columns and a legend describing the label and hex columns" src="https://raw.githubusercontent.com/bckohan/sphinxcontrib-enum/main/doc/images/enum-properties-light.png" width="287">
+</picture>
+
+Columns, members, headers, widths, captions, download formats and cell formatting can all be customized:
 
 ```rst
 .. enum-table:: mypackage.Planet
    :columns: name, radius
    :members: EARTH, MERCURY
    :headers: name=Planet, radius=Radius (m)
-   :download: csv, json
+   :caption: The inner planets.
 ```
 
 ## Documentation

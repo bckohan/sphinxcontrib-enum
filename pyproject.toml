@@ -81,6 +81,8 @@ lint = [
     "doc8>=1.1.2",
 ]
 coverage  = ["coverage[toml]>=7.6.1"]
+# regenerating the readme screenshots (just readme-images)
+screenshots = ["playwright>=1.40"]
 test = [
     { include-group = "coverage" },
     "beautifulsoup4>=4.12.0",
@@ -121,8 +123,8 @@ sphinx = true
 [tool.pytest.ini_options]
 python_files = "test*.py"
 norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__"
-# with PYTHONWARNDEFAULTENCODING=1 (set by the justfile) file io that relies on the
-# locale's encoding fails, it is not utf-8 on windows
+# with -X warn_default_encoding (the justfile test recipes set it) our file io that
+# relies on the locale's encoding fails, it is not utf-8 on windows
 filterwarnings = [
     "error::EncodingWarning:tests",
     "error::EncodingWarning:tests\\..*",
