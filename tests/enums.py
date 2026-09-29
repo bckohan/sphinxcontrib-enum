@@ -1,4 +1,4 @@
-import sys
+import inspect
 import typing as t
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum, IntFlag, StrEnum
@@ -233,16 +233,16 @@ class LegendBase:
     """Mass in *kilograms*."""
 
 
+# python 3.14+ supports dataclasses.field(doc=...)
+FIELD_DOCS = "doc" in inspect.signature(field).parameters
+
+
 @dataclass(frozen=True)
 class LegendData(LegendBase):
     #: Radius in meters.
     radius: float
 
-    # python 3.13+ supports field docs natively
-    moons: int = field(
-        default=0,
-        **({"doc": "Number of moons."} if sys.version_info >= (3, 13) else {}),
-    )
+    moons: int = field(default=0, **({"doc": "Number of moons."} if FIELD_DOCS else {}))
 
     rings: bool = False
 

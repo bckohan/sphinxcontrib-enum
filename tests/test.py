@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import textwrap
 from enum import Enum
 from pathlib import Path
@@ -28,6 +27,7 @@ from sphinxcontrib_enum.introspect import (
     to_json_value,
 )
 from tests.enums import (
+    FIELD_DOCS,
     LegendColor,
     LegendCorner,
     LegendPlanet,
@@ -851,7 +851,7 @@ def legend(page: BeautifulSoup, idx: int = 0) -> list[tuple[str, str]] | None:
 
 
 def test_column_docstrings():
-    moons = {"moons": "Number of moons."} if sys.version_info >= (3, 13) else {}
+    moons = {"moons": "Number of moons."} if FIELD_DOCS else {}
     assert column_docstrings(
         LegendPlanet,
         ["name", "value", "mass", "radius", "moons", "rings", "density", "doc"],
@@ -891,7 +891,7 @@ def test_legend(tmp_path):
     )
     assert not warnings
     page = soup(out)
-    moons = [("moons", "Number of moons.")] if sys.version_info >= (3, 13) else []
+    moons = [("moons", "Number of moons.")] if FIELD_DOCS else []
     # documented columns in column order, labeled with their headers
     assert legend(page) == [
         ("Mass", "Mass in kilograms."),

@@ -138,7 +138,7 @@ def _column_doc(classes: t.Iterable[type], column: str) -> str | None:
         if cls is object:
             continue
         field = getattr(cls, "__dataclass_fields__", {}).get(column)
-        # python 3.13+ supports dataclasses.field(doc=...)
+        # python 3.14+ supports dataclasses.field(doc=...)
         explicit = getattr(field, "doc", None)
         if isinstance(explicit, str) and explicit.strip():
             return inspect.cleandoc(explicit)
@@ -159,7 +159,7 @@ def column_docstrings(enum_cls: type[Enum], columns: t.Iterable[str]) -> dict[st
     and its bases) and then, if the member values are dataclasses or named tuples,
     on the value's classes. For each class, in order of precedence:
 
-    1. ``dataclasses.field(doc=...)`` (Python 3.13+).
+    1. ``dataclasses.field(doc=...)`` (Python 3.14+).
     2. A string literal immediately after the attribute, or a ``#:`` comment before
        it, in source. This covers dataclass fields, named tuple fields and
        enum-properties property annotations.

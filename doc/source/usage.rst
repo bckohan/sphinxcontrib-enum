@@ -109,7 +109,7 @@ Set :rst:dir:`enum-table:legend` to describe the table's columns in a legend ben
 descriptions come from the docstrings of the attributes behind each column:
 
 * dataclass fields - a string literal immediately after the field, a ``#:`` comment before it, or
-  ``dataclasses.field(doc=...)`` on Python 3.13+. Fields inherited from base dataclasses are
+  ``dataclasses.field(doc=...)`` on Python 3.14+. Fields inherited from base dataclasses are
   included.
 * enum-properties_ properties - docstrings on the property annotations
   (see :ref:`enum_properties`).
