@@ -17,6 +17,7 @@ becomes a column. By default the columns are:
    tuples.
 4. enum-properties_ properties - :ref:`a special case <enum_properties>`, in the order they are
    declared.
+5. ``doc`` - :ref:`member docstrings <member_docstrings>`, if any member has one.
 
 Dataclass Enums
 ===============
@@ -53,6 +54,87 @@ the same way. The value's fields replace the ``value`` column:
    .. enum-table:: examples.Color
 
 .. enum-table:: examples.Color
+
+.. _member_docstrings:
+
+Member Docstrings
+=================
+
+If any member in the table has a docstring, the docstrings are added in a column called ``doc``.
+Docstrings are found the same way :mod:`~sphinx.ext.autodoc` finds them: a string literal
+immediately after the member, or a ``#:`` comment before it. A ``__doc__`` attribute set on the
+member itself (for example by the enum's ``__init__``) takes precedence. Members without a
+docstring have an empty cell.
+
+.. literalinclude:: ./examples.py
+   :language: python
+   :start-after: # [docstrings]
+   :end-before: # [docstrings]
+
+.. code-block:: rst
+
+   .. enum-table:: examples.Severity
+
+.. enum-table:: examples.Severity
+
+Docstrings are parsed as reStructuredText, so inline markup, cross references and multiple
+paragraphs work. CSV and JSON downloads contain the rendered text of the docstring.
+
+* The doc column is appended after the other columns. If a column with the same name already
+  exists (e.g. a dataclass field called ``doc``) the docstrings override it in place.
+* Use :rst:dir:`enum-table:doc-column` to give the column a different name, for example if you
+  want to keep a ``doc`` field as well as the docstrings.
+* Use :rst:dir:`enum-table:docs` to turn the doc column off. The column name is then an ordinary
+  column again.
+* When :rst:dir:`enum-table:columns` is given, the doc column is only included where it is
+  listed.
+* Only the rendered members are considered. If none of them has a docstring there is no doc
+  column.
+
+.. code-block:: rst
+
+   .. enum-table:: examples.Severity
+      :doc-column: description
+      :headers: description=Description
+
+   .. enum-table:: examples.Severity
+      :docs: false
+
+.. _column_legend:
+
+Column Legend
+=============
+
+Set :rst:dir:`enum-table:legend` to describe the table's columns in a legend beneath it. Column
+descriptions come from the docstrings of the attributes behind each column:
+
+* dataclass fields - a string literal immediately after the field, a ``#:`` comment before it, or
+  ``dataclasses.field(doc=...)`` on Python 3.13+. Fields inherited from base dataclasses are
+  included.
+* enum-properties_ properties - docstrings on the property annotations
+  (see :ref:`enum_properties`).
+* named tuple fields, and properties defined with ``@property`` (their ``__doc__``).
+
+Only documented columns are listed, in column order and labeled with their headers. If no rendered
+column is documented, there is no legend. Descriptions are parsed as reStructuredText.
+
+.. code-block:: rst
+
+   .. enum-table:: examples.Planet
+      :legend:
+
+.. enum-table:: examples.Planet
+   :legend:
+
+The legend is a definition list, so it renders in every builder, including PDF. In HTML the table
+is linked to its legend with ``aria-describedby`` so screen readers announce the descriptions
+with the table. Legends are off by default.
+
+.. note::
+
+   Column descriptions are rendered as a visible legend rather than as tooltips on the headers
+   because tooltips (``title`` attributes) are only available to mouse users and are not reliably
+   announced by screen readers.
 
 Selecting Columns
 =================
@@ -164,7 +246,8 @@ enum-properties Enums
 enum-properties_ enums are supported as a special case. Each declared property is rendered as a
 column after the ``value`` column (and after any dataclass fields if the enum also mixes in a
 dataclass). enum-properties is not a dependency of this extension. Its enums are detected
-automatically.
+automatically. Docstrings on the property annotations describe their columns in the
+:ref:`column legend <column_legend>`.
 
 .. literalinclude:: ./examples.py
    :language: python
@@ -174,8 +257,10 @@ automatically.
 .. code-block:: rst
 
    .. enum-table:: examples.Shade
+      :legend:
 
 .. enum-table:: examples.Shade
+   :legend:
 
 Cross Referencing
 =================

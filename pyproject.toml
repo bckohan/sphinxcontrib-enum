@@ -1,6 +1,6 @@
 [project]
 name = "sphinxcontrib-enum"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sphinx directive for documenting dataclass enums in tabular format, with support for enum-properties."
 requires-python = ">=3.11,<4.0"
 authors = [
