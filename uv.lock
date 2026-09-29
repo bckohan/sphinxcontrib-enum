@@ -1470,7 +1470,7 @@ wheels = [
 
 [[package]]
 name = "sphinxcontrib-enum"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -1527,6 +1527,7 @@ screenshots = [
 test = [
     { name = "beautifulsoup4" },
     { name = "coverage", extra = ["toml"] },
+    { name = "furo" },
     { name = "pypdf" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -1583,6 +1584,7 @@ screenshots = [{ name = "playwright", specifier = ">=1.40" }]
 test = [
     { name = "beautifulsoup4", specifier = ">=4.12.0" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
+    { name = "furo", specifier = ">=2024.8.6" },
     { name = "pypdf", specifier = ">=6.0.0" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
