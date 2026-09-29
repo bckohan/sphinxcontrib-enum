@@ -151,6 +151,9 @@ def download_formats(value: t.Any) -> list[str]:
 
 
 def download_option(argument: str | None) -> list[str]:
+    """Given without a value (like the other boolean options) offer every format."""
+    if not (argument or "").strip():
+        return list(DOWNLOAD_FORMATS)
     return download_formats(argument)
 
 

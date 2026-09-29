@@ -228,12 +228,16 @@ omit them. Tables render natively in every builder, including PDF.
      }
 
 Use :rst:dir:`enum-table:download` to override the setting for a single table, either to add
-downloads to a table when they are off globally or to remove them when they are on:
+downloads to a table when they are off globally or to remove them when they are on. Given without
+a value it offers every format:
 
 .. code-block:: rst
 
    .. enum-table:: examples.Planet
-      :download: csv, json
+      :download:
+
+   .. enum-table:: examples.Planet
+      :download: json
 
    .. enum-table:: examples.Planet
       :download: none

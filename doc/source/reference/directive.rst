@@ -94,8 +94,9 @@ Directive
       **default**: :confval:`enum_table_download`
 
       The download formats to offer for this table. Supports ``csv`` and ``json``, or ``none`` to
-      disable downloads. Overrides :confval:`enum_table_download`, which is off by default, so
-      use this to add downloads to individual tables.
+      disable downloads. Given without a value, every format is offered. Overrides
+      :confval:`enum_table_download`, which is off by default, so use this to add downloads to
+      individual tables.
 
    .. rst:directive:option:: docs: include member docstrings
       :type: true or false

@@ -63,9 +63,12 @@ def build(tmp_path: Path, rst: str, builder: str = "html", **conf) -> tuple[Path
     src.mkdir(exist_ok=True)
     (src / "conf.py").write_text(
         "extensions = ['sphinxcontrib_enum']\n"
-        + "".join(f"{key} = {value!r}\n" for key, value in conf.items())
+        + "".join(f"{key} = {value!r}\n" for key, value in conf.items()),
+        encoding="utf-8",
     )
-    (src / "index.rst").write_text("Test\n====\n\n" + textwrap.dedent(rst))
+    (src / "index.rst").write_text(
+        "Test\n====\n\n" + textwrap.dedent(rst), encoding="utf-8"
+    )
     out = tmp_path / "out" / builder
     warnings = io.StringIO()
     nocolor()
@@ -85,7 +88,7 @@ def build(tmp_path: Path, rst: str, builder: str = "html", **conf) -> tuple[Path
 
 
 def soup(out: Path, page: str = "index.html") -> BeautifulSoup:
-    return BeautifulSoup((out / page).read_text(), "html.parser")
+    return BeautifulSoup((out / page).read_text(encoding="utf-8"), "html.parser")
 
 
 def table_data(page: BeautifulSoup, idx: int = 0) -> tuple[list[str], list[list[str]]]:
@@ -104,7 +107,7 @@ def downloads(out: Path, page: BeautifulSoup, idx: int = 0) -> dict[str, str]:
     for link in container.select("a.enum-table-download"):
         path = (out / link["href"]).resolve()
         assert path.is_file()
-        files[link["download"]] = path.read_text()
+        files[link["download"]] = path.read_text(encoding="utf-8")
     return files
 
 
@@ -418,16 +421,22 @@ def test_download_option(tmp_path):
             :download: JSON
 
         .. enum-table:: tests.enums.Plain
+
+        .. enum-table:: tests.enums.Plain
+            :download:
         """,
         enum_table_download=["csv"],
     )
     assert not warnings
     page = soup(out)
     containers = page.select("div.enum-table-container")
-    assert len(containers) == 3
+    assert len(containers) == 4
     assert not containers[0].select("div.enum-table-downloads")
     assert set(downloads(out, page, 0)) == {"Plain.json"}
     assert set(downloads(out, page, 1)) == {"Plain.csv"}
+    # given without a value, every format is offered
+    links = containers[3].select("a.enum-table-download")
+    assert [link["download"] for link in links] == ["Plain.csv", "Plain.json"]
 
 
 @pytest.mark.parametrize(
@@ -491,7 +500,9 @@ def test_download_config_invalid(tmp_path, setting):
 def test_download_links_relative(tmp_path):
     src = tmp_path / "src" / "sub" / "deeper"
     src.mkdir(parents=True)
-    (src / "page.rst").write_text("Page\n====\n\n.. enum-table:: tests.enums.Plain\n")
+    (src / "page.rst").write_text(
+        "Page\n====\n\n.. enum-table:: tests.enums.Plain\n", encoding="utf-8"
+    )
     for builder, page_path in (
         ("html", "sub/deeper/page.html"),
         ("dirhtml", "sub/deeper/page/index.html"),
@@ -1008,7 +1019,7 @@ def test_legend_other_builders(tmp_path, builder, filename):
     )
     assert not warnings
     path = out / filename if filename else next(out.glob("*.tex"))
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert "Human readable label." in text
     assert "aria-describedby" not in text
 
@@ -1101,7 +1112,7 @@ def test_text_builder(tmp_path):
         enum_table_download=True,
     )
     assert not warnings
-    text = (out / "index.txt").read_text()
+    text = (out / "index.txt").read_text(encoding="utf-8")
     assert "ff0000" in text
     assert "CSV" not in text and "JSON" not in text
 
@@ -1114,7 +1125,7 @@ def test_latex_builder(tmp_path):
         enum_table_download=True,
     )
     assert not warnings
-    tex = next(out.glob("*.tex")).read_text()
+    tex = next(out.glob("*.tex")).read_text(encoding="utf-8")
     assert "MERCURY" in tex
     assert "enum-table-download" not in tex
 
@@ -1137,7 +1148,7 @@ def test_latex_longtable_widths(tmp_path):
     """
     out, warnings = build(tmp_path, rst, builder="latex")
     assert not warnings
-    tex = next(out.glob("*.tex")).read_text()
+    tex = next(out.glob("*.tex")).read_text(encoding="utf-8")
     # small tables still use tabulary
     assert "\\begin{tabulary}" in tex
     longtables = tex.split("\\begin{longtable}")[1:]
@@ -1162,7 +1173,9 @@ def test_epub_builder(tmp_path):
         epub_copyright="test",
         enum_table_download=True,
     )
-    assert "enum-table-download" not in (out / "index.xhtml").read_text()
+    assert "enum-table-download" not in (out / "index.xhtml").read_text(
+        encoding="utf-8"
+    )
     assert not (out / "_downloads").exists()
 
 
@@ -1171,10 +1184,10 @@ def test_rebuild_refreshes_static(tmp_path):
     out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Plain\n")
     assert not warnings
     css = out / "_static" / "sphinxcontrib_enum.css"
-    css.write_text("stale")
+    css.write_text("stale", encoding="utf-8")
     out, warnings = build(tmp_path, ".. enum-table:: tests.enums.Plain\n")
     assert not warnings
-    assert css.read_text() != "stale"
+    assert css.read_text(encoding="utf-8") != "stale"
 
 
 # -- pdf ------------------------------------------------------------------------------------
@@ -1207,7 +1220,9 @@ def build_pdf(tmp_path: Path, rst: str, engine: str, **conf) -> tuple[Path, str,
         ["make", "all-pdf"],
         cwd=out,
         capture_output=True,
-        text=True,
+        # latex output is not guaranteed to be valid utf-8
+        encoding="utf-8",
+        errors="replace",
         env={
             **os.environ,
             "LATEXOPTS": "-interaction=nonstopmode -halt-on-error",
@@ -1217,7 +1232,7 @@ def build_pdf(tmp_path: Path, rst: str, engine: str, **conf) -> tuple[Path, str,
     assert result.returncode == 0 and pdfs, (
         result.stdout[-3000:] + result.stderr[-3000:]
     )
-    log = next(out.glob("*.log")).read_text(errors="replace")
+    log = next(out.glob("*.log")).read_text(encoding="utf-8", errors="replace")
     return pdfs[0], warnings, log
 
 
@@ -1303,7 +1318,7 @@ def test_pdf_longtable(tmp_path, engine):
         tmp_path, ".. enum-table:: tests.enums.Wide\n", engine
     )
     assert not warnings
-    tex = next(pdf.parent.glob("*.tex")).read_text()
+    tex = next(pdf.parent.glob("*.tex")).read_text(encoding="utf-8")
     assert "\\begin{longtable}" in tex
     reader = PdfReader(pdf)
     table_pages = [

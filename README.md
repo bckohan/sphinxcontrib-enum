@@ -12,7 +12,7 @@
 
 Sphinx directive for documenting dataclass enums in tabular format, with support for enum-properties.
 
-Render [dataclass](https://docs.python.org/3/library/dataclasses.html) enums as tables with a row for each member and a column for every field. Tables can optionally offer CSV and JSON download buttons. Enums with dataclass values, named tuple values and plain enums work too, and [enum-properties](https://enum-properties.readthedocs.io) enums are supported as a special case: each property becomes a column.
+Render [dataclass](https://docs.python.org/3/library/dataclasses.html) enums as tables with a row for each member and a column for every field. Tables can optionally offer CSV and JSON download buttons. Enums with dataclass values, named tuple values and plain enums work too, and [enum-properties](https://enum-properties.readthedocs.io) enums are also supported!
 
 ## Installation
 

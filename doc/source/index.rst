@@ -84,6 +84,7 @@ For example:
 
          .. enum-table:: examples.Planet
             :legend:
+            :download: csv, json
 
       .. enum-table:: examples.Planet
          :legend:
@@ -102,6 +103,7 @@ For example:
          .. enum-table:: examples.Severity
 
       .. enum-table:: examples.Severity
+         :download:
 
    .. tab:: enum-properties
 
@@ -117,9 +119,11 @@ For example:
 
          .. enum-table:: examples.Shade
             :legend:
+            :download:
 
       .. enum-table:: examples.Shade
          :legend:
+         :download:
 
 .. toctree::
    :maxdepth: 2

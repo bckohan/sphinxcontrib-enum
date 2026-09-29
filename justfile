@@ -4,6 +4,10 @@ set script-interpreter := ['uv', 'run', '--project', '.', '--script']
 
 export PYTHONPATH := source_directory()
 
+# warn about file io that relies on the locale's encoding (not utf-8 on windows),
+# the test suite turns these warnings from our code into errors
+export PYTHONWARNDEFAULTENCODING := "1"
+
 [private]
 default:
     @just --list --list-submodules
